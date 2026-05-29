@@ -1,16 +1,14 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use super::{Context, Module, ModuleConfig};
+use crate::configs::claude_context::ClaudeDisplayConfig;
 use crate::configs::claude_usage::ClaudeUsageConfig;
 use crate::formatter::StringFormatter;
+use crate::utils::render_time;
 
 pub fn module<'a>(context: &'a Context) -> Option<Module<'a>> {
     let mut module = context.new_module("claude_usage");
     let config = ClaudeUsageConfig::try_load(module.config);
-
-    if config.disabled {
-        return None;
-    }
 
     let claude_data = context.claude_code_data.as_ref()?;
     let rate_limits = claude_data.rate_limits.as_ref()?;
@@ -35,16 +33,28 @@ pub fn module<'a>(context: &'a Context) -> Option<Module<'a>> {
 
     let display_style = display_style?;
 
+    // Show each window only when its own usage maps to a visible (non-hidden)
+    // display threshold, so the format's conditional groups can drop a window
+    // that isn't worth surfacing.
+    let five_hour_visible = window_visible(five_hour_pct, &config.display);
+    let seven_day_visible = window_visible(seven_day_pct, &config.display);
+
     let now_secs = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs();
 
-    let five_hour_reset = format_duration(rate_limits.five_hour.resets_at.saturating_sub(now_secs));
-    let seven_day_reset = format_duration(rate_limits.seven_day.resets_at.saturating_sub(now_secs));
+    let five_hour_reset = render_time(
+        u128::from(rate_limits.five_hour.resets_at.saturating_sub(now_secs)) * 1000,
+        false,
+    );
+    let seven_day_reset = render_time(
+        u128::from(rate_limits.seven_day.resets_at.saturating_sub(now_secs)) * 1000,
+        false,
+    );
 
-    let five_hour_pct_str = format!("{:.0}", five_hour_pct);
-    let seven_day_pct_str = format!("{:.0}", seven_day_pct);
+    let five_hour_pct_str = format!("{five_hour_pct:.0}");
+    let seven_day_pct_str = format!("{seven_day_pct:.0}");
 
     let parsed = StringFormatter::new(config.format).and_then(|formatter| {
         formatter
@@ -53,10 +63,10 @@ pub fn module<'a>(context: &'a Context) -> Option<Module<'a>> {
                 _ => None,
             })
             .map(|variable| match variable {
-                "five_hour_pct" => Some(Ok(five_hour_pct_str.as_str())),
-                "five_hour_reset" => Some(Ok(five_hour_reset.as_str())),
-                "seven_day_pct" => Some(Ok(seven_day_pct_str.as_str())),
-                "seven_day_reset" => Some(Ok(seven_day_reset.as_str())),
+                "five_hour_pct" => five_hour_visible.then_some(Ok(five_hour_pct_str.as_str())),
+                "five_hour_reset" => five_hour_visible.then_some(Ok(five_hour_reset.as_str())),
+                "seven_day_pct" => seven_day_visible.then_some(Ok(seven_day_pct_str.as_str())),
+                "seven_day_reset" => seven_day_visible.then_some(Ok(seven_day_reset.as_str())),
                 _ => None,
             })
             .parse(None, Some(context))
@@ -73,19 +83,22 @@ pub fn module<'a>(context: &'a Context) -> Option<Module<'a>> {
     Some(module)
 }
 
-fn format_duration(secs: u64) -> String {
-    if secs >= 86400 {
-        format!("{}d{}h", secs / 86400, (secs % 86400) / 3600)
-    } else if secs >= 3600 {
-        format!("{}h{}m", secs / 3600, (secs % 3600) / 60)
-    } else {
-        format!("{}m", secs / 60)
-    }
+/// A rate-limit window is displayed when its usage percentage matches a
+/// configured `display` entry that is not hidden.
+fn window_visible(pct: f32, display: &[ClaudeDisplayConfig<'_>]) -> bool {
+    display
+        .iter()
+        .filter(|s| pct >= s.threshold)
+        .max_by(|a, b| {
+            a.threshold
+                .partial_cmp(&b.threshold)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })
+        .is_some_and(|s| !s.hidden)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::format_duration;
     use crate::test::ModuleRenderer;
     use nu_ansi_term::Color;
 
@@ -100,19 +113,6 @@ mod tests {
         let data = make_data(0.0, 0.0, u64::MAX, u64::MAX);
         // rate_limits is present but hidden below 70% threshold
         let actual = ModuleRenderer::new("claude_usage")
-            .claude_code_data(data)
-            .collect();
-        assert_eq!(actual, None);
-    }
-
-    #[test]
-    fn test_disabled() {
-        let data = make_data(80.0, 10.0, u64::MAX, u64::MAX);
-        let actual = ModuleRenderer::new("claude_usage")
-            .config(toml::toml! {
-                [claude_usage]
-                disabled = true
-            })
             .claude_code_data(data)
             .collect();
         assert_eq!(actual, None);
@@ -197,15 +197,27 @@ mod tests {
     }
 
     #[test]
-    fn test_format_duration() {
-        assert_eq!(format_duration(0), "0m");
-        assert_eq!(format_duration(59), "0m");
-        assert_eq!(format_duration(60), "1m");
-        assert_eq!(format_duration(3599), "59m");
-        assert_eq!(format_duration(3600), "1h0m");
-        assert_eq!(format_duration(5025), "1h23m");
-        assert_eq!(format_duration(86400), "1d0h");
-        assert_eq!(format_duration(100000), "1d3h");
+    fn test_window_hidden_independently() {
+        // five_hour (50%) is below the visible threshold while seven_day (95%)
+        // is critical: only the seven_day window should render.
+        let data = make_data(50.0, 95.0, u64::MAX, u64::MAX);
+        let actual = ModuleRenderer::new("claude_usage")
+            .config(toml::toml! {
+                [claude_usage]
+                format = "[($five_hour_pct% )($seven_day_pct%)]($style) "
+                [[claude_usage.display]]
+                threshold = 0.0
+                hidden = true
+                [[claude_usage.display]]
+                threshold = 70.0
+                style = "bold yellow"
+                [[claude_usage.display]]
+                threshold = 90.0
+                style = "bold red"
+            })
+            .claude_code_data(data)
+            .collect();
+        assert_eq!(actual, Some(format!("{} ", Color::Red.bold().paint("95%"))));
     }
 
     fn make_data(
