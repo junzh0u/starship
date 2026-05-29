@@ -661,11 +661,11 @@ The `claude_usage` module displays Claude Code's 5-hour and 7-day rate limit usa
 
 #### Options
 
-| Option     | Default                                                                                                       | Description                         |
-| ---------- | ------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| Option     | Default                                                                                                           | Description                         |
+| ---------- | ----------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
 | `format`   | `'[($five_hour_pct% \(resets in $five_hour_reset\)  )($seven_day_pct% \(resets in $seven_day_reset\))]($style) '` | The format for the module.          |
-| `display`  | [see below](#display-2)                                                                                       | Threshold and style configurations. |
-| `disabled` | `false`                                                                                                       | Disables the `claude_usage` module. |
+| `display`  | [see below](#display-2)                                                                                           | Threshold and style configurations. |
+| `disabled` | `false`                                                                                                           | Disables the `claude_usage` module. |
 
 ##### Display
 
@@ -695,13 +695,13 @@ style = "bold red"
 
 #### Variables
 
-| Variable        | Example | Description                                           |
-| --------------- | ------- | ----------------------------------------------------- |
-| five_hour_pct   | `65`    | Percentage of 5-hour window used                      |
-| five_hour_reset | `1h23m45s` | Time until 5-hour window resets                    |
-| seven_day_pct   | `7`     | Percentage of 7-day window used                       |
-| seven_day_reset | `2d14h0m0s` | Time until 7-day window resets                    |
-| style\*         |         | Mirrors the style from the matching display threshold |
+| Variable        | Example     | Description                                           |
+| --------------- | ----------- | ----------------------------------------------------- |
+| five_hour_pct   | `65`        | Percentage of 5-hour window used                      |
+| five_hour_reset | `1h23m45s`  | Time until 5-hour window resets                       |
+| seven_day_pct   | `7`         | Percentage of 7-day window used                       |
+| seven_day_reset | `2d14h0m0s` | Time until 7-day window resets                        |
+| style\*         |             | Mirrors the style from the matching display threshold |
 
 \*: This variable can only be used as a part of a style string
 
