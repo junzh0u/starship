@@ -371,7 +371,7 @@ To use Starship as your Claude Code statusline:
 
 When invoked with `starship statusline claude-code`, Starship receives Claude Code session data via stdin and renders a statusline using a dedicated profile named `claude-code`.
 
-The profile includes four specialized modules:
+The profile includes some specialized modules:
 
 - `claude_model`: Displays the current Claude model being used
 - `claude_context`: Shows context window usage with a visual gauge
@@ -663,7 +663,7 @@ The `claude_usage` module displays Claude Code's 5-hour and 7-day rate limit usa
 
 | Option     | Default                                                                                                       | Description                         |
 | ---------- | ------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
-| `format`   | `'[$five_hour_pct% \(resets in $five_hour_reset\)  $seven_day_pct% \(resets in $seven_day_reset\)]($style) '` | The format for the module.          |
+| `format`   | `'[($five_hour_pct% \(resets in $five_hour_reset\)  )($seven_day_pct% \(resets in $seven_day_reset\))]($style) '` | The format for the module.          |
 | `display`  | [see below](#display-2)                                                                                       | Threshold and style configurations. |
 | `disabled` | `false`                                                                                                       | Disables the `claude_usage` module. |
 
@@ -698,9 +698,9 @@ style = "bold red"
 | Variable        | Example | Description                                           |
 | --------------- | ------- | ----------------------------------------------------- |
 | five_hour_pct   | `65`    | Percentage of 5-hour window used                      |
-| five_hour_reset | `1h23m` | Time until 5-hour window resets                       |
+| five_hour_reset | `1h23m45s` | Time until 5-hour window resets                    |
 | seven_day_pct   | `7`     | Percentage of 7-day window used                       |
-| seven_day_reset | `2d14h` | Time until 7-day window resets                        |
+| seven_day_reset | `2d14h0m0s` | Time until 7-day window resets                    |
 | style\*         |         | Mirrors the style from the matching display threshold |
 
 \*: This variable can only be used as a part of a style string
